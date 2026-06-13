@@ -55,121 +55,100 @@ namespace Npcgen2CoordData
             Progress.Maximum = value;
         }
 
-        private void load_coord_Click(object sender, EventArgs e)
+        private void btnImportAndSave_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            // 1. Select coord_data.txt
+            OpenFileDialog ofdCoord = new OpenFileDialog()
             {
+                Title = "Open coord_data.txt",
                 Filter = "Coord_data|*.txt|All Files|*.*"
             };
-            if (ofd.ShowDialog() == DialogResult.OK)
-            {
-                new Thread(() => coord.Read(ofd.FileName)).Start();
-            }
-        }
+            if (ofdCoord.ShowDialog() != DialogResult.OK) return;
 
-        private void save_coord_Click(object sender, EventArgs e)
-        {
-            SaveFileDialog sfd = new SaveFileDialog()
+            // 2. Select npcgen.data
+            OpenFileDialog ofdNpcgen = new OpenFileDialog()
             {
-                Filter = "Coord_data|*.txt|All Files|*.*"
+                Title = "Open npcgen.data",
+                Filter = "Npcgen|npcgen.data|All Files|*.*"
             };
-            if (sfd.ShowDialog() == DialogResult.OK)
-            {
-                new Thread(() => coord.Save(sfd.FileName)).Start();
-            }
-        }
+            if (ofdNpcgen.ShowDialog() != DialogResult.OK) return;
 
-        private void import_Click(object sender, EventArgs e)
-        {
-            OpenFileDialog ofd = new OpenFileDialog()
+            // 3. Input location name
+            string map = Microsoft.VisualBasic.Interaction.InputBox(
+                "Location name where mobs are located, e.g. world, a78, a64",
+                "Location Name", "world");
+            if (string.IsNullOrEmpty(map)) return;
+
+            string coordPath = ofdCoord.FileName;
+            string npcgenPath = ofdNpcgen.FileName;
+
+            btnImportAndSave.Enabled = false;
+
+            new Thread(() =>
             {
-                Filter = "Npcgen|Npcgen.data|All Files|*.*"
-            };
-            if (ofd.ShowDialog() == DialogResult.OK)
-            {
-                new Thread(() => 
+                // 4. Load coord_data.txt
+                coord.Read(coordPath);
+
+                // 5. Load npcgen.data
+                npcgen.ReadNpcgen(new BinaryReader(File.OpenRead(npcgenPath)));
+
+                // 6. Remove all old entries with matching location
+                ProgressText($"Removing old '{map}' entries...");
+                foreach (var key in coord.Entrys.Keys.ToList())
                 {
-                    ProgressMax(npcgen.NpcMobList.Count + npcgen.ResourcesList.Count);
-                    List<int> cleared = new List<int>();
-                    npcgen.ReadNpcgen(new BinaryReader(File.OpenRead(ofd.FileName)));
-                    ProgressText("Импортируем");
-                    string map = Microsoft.VisualBasic.Interaction.InputBox("Название локации в которой находятся мобы, например, world, a78, a64", "Название локации", "world");
-                    npcgen.NpcMobList.ForEach(x =>
+                    coord.Entrys[key].RemoveAll(entry => entry.MapNumber == map);
+                    if (coord.Entrys[key].Count == 0)
+                        coord.Entrys.Remove(key);
+                }
+
+                // 7. Import new data from npcgen
+                ProgressText("Importing...");
+                ProgressMax(npcgen.NpcMobList.Count + npcgen.ResourcesList.Count);
+                ProgressValue(0);
+
+                npcgen.NpcMobList.ForEach(x =>
+                {
+                    ProgressNext();
+                    x.MobDops.ForEach(y =>
                     {
-                        ProgressNext();
-                        x.MobDops.ForEach(y =>
+                        string id = y.Id.ToString();
+                        if (!coord.Entrys.ContainsKey(id))
+                            coord.Entrys[id] = new List<CoordDataEntry>();
+                        coord.Entrys[id].Add(new CoordDataEntry()
                         {
-                            if (coord.Entrys.ContainsKey(y.Id.ToString()))
-                            {
-                                if (!cleared.Contains(y.Id))
-                                {
-                                    coord.Entrys[y.Id.ToString()].Clear();
-                                    cleared.Add(y.Id);
-                                }
-                                coord.Entrys[y.Id.ToString()].Add(new CoordDataEntry()
-                                {
-                                    MapNumber = map,
-                                    X = x.X_position,
-                                    Y = x.Y_position,
-                                    Z = x.Z_position
-                                });
-                            }
-                            else
-                            {
-                                cleared.Add(y.Id);
-                                coord.Entrys[y.Id.ToString()] = new List<CoordDataEntry>
-                                {
-                                    new CoordDataEntry()
-                                    {
-                                        MapNumber = map,
-                                        X = x.X_position,
-                                        Y = x.Y_position,
-                                        Z = x.Z_position
-                                    }
-                                };
-                            }
+                            MapNumber = map,
+                            X = x.X_position,
+                            Y = x.Y_position,
+                            Z = x.Z_position
                         });
                     });
-                    npcgen.ResourcesList.ForEach(x =>
+                });
+
+                npcgen.ResourcesList.ForEach(x =>
+                {
+                    ProgressNext();
+                    x.ResExtra.ForEach(y =>
                     {
-                        ProgressNext();
-                        x.ResExtra.ForEach(y =>
+                        string id = y.Id.ToString();
+                        if (!coord.Entrys.ContainsKey(id))
+                            coord.Entrys[id] = new List<CoordDataEntry>();
+                        coord.Entrys[id].Add(new CoordDataEntry()
                         {
-                            if (coord.Entrys.ContainsKey(y.Id.ToString()))
-                            {
-                                if (!cleared.Contains(y.Id))
-                                {
-                                    coord.Entrys[y.Id.ToString()].Clear();
-                                    cleared.Add(y.Id);
-                                }
-                                coord.Entrys[y.Id.ToString()].Add(new CoordDataEntry()
-                                {
-                                    MapNumber = map,
-                                    X = x.X_position,
-                                    Y = x.Y_position,
-                                    Z = x.Z_position
-                                });
-                            }
-                            else
-                            {
-                                cleared.Add(y.Id);
-                                coord.Entrys[y.Id.ToString()] = new List<CoordDataEntry>
-                                {
-                                    new CoordDataEntry()
-                                    {
-                                        MapNumber = map,
-                                        X = x.X_position,
-                                        Y = x.Y_position,
-                                        Z = x.Z_position
-                                    }
-                                };
-                            }
+                            MapNumber = map,
+                            X = x.X_position,
+                            Y = x.Y_position,
+                            Z = x.Z_position
                         });
                     });
-                    ProgressValue(0);
-                    ProgressText("Готово");
-                }).Start();
-            }
+                });
+
+                // 8. Save to same file
+                coord.Save(coordPath);
+
+                ProgressValue(0);
+                ProgressText("Done");
+                btnImportAndSave.Enabled = true;
+            }).Start();
         }
     }
 }
